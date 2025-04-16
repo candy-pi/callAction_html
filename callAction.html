@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<script src="https://unpkg.com/eventemitter3@latest/dist/eventemitter3.umd.min.js"></script>
+<script src="../dist/RosLib.umd.cjs"></script>
+
+
+</head>
+
+<body>
+  <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 20px auto; width: 50%;">
+    <div style= " width: 25vw;height: 25vw; background-color: #f0f0f0; border: 1px solid #ccc; padding: 0.2vw;">
+      <div style=" width: 24vw;height: 20vw; background-color: #f0f0f0; ">
+        <div style="margin-bottom: 0.2vw; font-weight: bold; color: #333;font-size: 1.4vw;">actionName</div>
+        <input id="input1" type="text" style="width: 23vw; margin-bottom: 0.5vw;" placeholder="例如: /turtle1/rotate_absolute">
+        
+        <div style="margin-bottom: 0.2vw; font-weight: bold; color: #333;font-size: 1.4vw;">actionType</div>
+        <input id="input3" type="text" style="width: 23vw; margin-bottom: 0.5vw;" placeholder="例如: turtlesim/action/RotateAbsolute">
+        
+        <div style="margin-bottom: 0.2vw; font-weight: bold; color: #333;font-size: 1.4vw;">goal</div>
+        <textarea id="input2" style="width: 23vw; height: 6vw; resize: vertical;" 
+          placeholder='例如: "theta":10&#10;或者多行输入:&#10;"x":1.0,&#10;"y":2.0'></textarea>
+      </div>
+      <button id="button1" 
+          onclick="handleClick()"
+          style="margin-left: 16vw; width: 8vw; height: 3.5vw; 
+          background-color: #FFA500; border: none; border-radius: 3px;
+          transition: all 0.3s ease; cursor: pointer;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.2);"
+          onmouseover="this.style.backgroundColor='#FF8C00'"
+          onmouseout="this.style.backgroundColor='#FFA500'"
+          onmousedown="this.style.backgroundColor='#FF6B00'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.2)'"
+          onmouseup="this.style.backgroundColor='#FF8C00'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.2)'">send</button>
+  </button>
+    </div>
+    <div style="margin-bottom: 0.2vw; font-weight: bold; color: #333;font-size: 1.4vw;">feedback</div>
+<div id="feedbackResult" style="position: relative; width: 50%;height: 15vw; background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; overflow: auto; word-wrap: break-word; white-space: pre-wrap;">
+
+</div>
+    <div style="margin-bottom: 0.2vw; font-weight: bold; color: #333;font-size: 1.4vw;">result</div>
+<div id="actionResult" style="position: relative; width: 50%;height: 15vw; background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; overflow: auto; word-wrap: break-word; white-space: pre-wrap;">
+
+</div>
+  </div>
+  <ol>
+    <li><tt>ros2 launch rosbridge_server rosbridge_websocket_launch.xml</tt></li>
+    <li><tt>ros2 run action_tutorials_py fibonacci_action_server</tt></li>
+  </ol>
+  <div id="statusIndicator">
+    <p id="connecting">
+      Connecting to rosbridge...
+    </p>
+    <p id="connected" style="color:#00D600; display:none">
+      Connected
+    </p>
+    <p id="error" style="color:#FF0000; display:none">
+      Error in the backend!
+    </p>
+    <p id="closed" style="display:none">
+      Connection closed.
+    </p>
+  </div>
+  <button onclick="CloseClick()">click</button>
+</body>
+</html>
+
+<script>
+  // Connecting to ROS
+  // -----------------
+  var ros = new ROSLIB.Ros({
+    url : 'ws://localhost:9090'
+  });
+
+  // get the input of the text box and send it to the robot when the button is clicked
+  var input1 = document.querySelector('#input1')
+  var button1 = document.getElementById('button1');
+  var button2 = document.getElementById('button2');
+  var input3 = document.getElementById('input3');
+  var actionName = '';
+  var actionType = '';
+  let goal = {};
+  ros.on('error', function(error) {
+    document.getElementById('connecting').style.display = 'none';
+    document.getElementById('connected').style.display = 'none';
+    document.getElementById('closed').style.display = 'none';
+    document.getElementById('error').style.display = 'inline';
+    console.log(error);
+  });
+
+  // Find out exactly when we made a connection.
+  ros.on('connection', function() {
+    console.log('Connection made!');
+    document.getElementById('connecting').style.display = 'none';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('closed').style.display = 'none';
+    document.getElementById('connected').style.display = 'inline';
+  });
+
+  ros.on('close', function() {
+    console.log('Connection closed.');
+    document.getElementById('connecting').style.display = 'none';
+    document.getElementById('connected').style.display = 'none';
+    document.getElementById('closed').style.display = 'inline';
+  });
+
+
+  input1.addEventListener('change', function(e) {
+    console.log('当前输入内容:', e.target.value);
+    actionName = e.target.value;
+    console.log("actionName is：",actionName);
+    // 这里可以添加处理输入内容的逻辑
+    // 后续改成actionName在ros里存在的情况才可以
+   
+  })
+
+
+
+  input2.addEventListener('change', function (e) {
+  const input = e.target.value.trim();
+  try {
+    // 尝试拼接为完整 JSON 字符串
+    const wrapped = `{${input}}`;
+    const parsed = JSON.parse(wrapped);
+    
+    // 如果成功，处理 key 去掉引号
+    e.target.style.color = 'black';
+    e.target.setCustomValidity('');
+    
+    // 创建目标对象，去掉 key 的引号
+    goal = {};
+    for (let key in parsed) {
+      goal[key] = parsed[key];
+    }
+    // goal = JSON.stringify(goal);
+    console.log('成功解析为：', goal);
+    console.log('goal类型为：', typeof goal);
+  } catch (error) {
+    e.target.style.color = 'red';
+    e.target.setCustomValidity('请输入类似 "theta":1.57 的 JSON 属性对，多个用逗号分隔');
+    console.error('格式错误，请输入类似 "theta":1.57 的键值对');
+    return;
+  }
+  // console.log("goal is：",goal=='{"theta":18}');
+  
+});
+
+input3.addEventListener('change', function(e) {
+    console.log('当前输入内容:', e.target.value);
+    actionType = e.target.value;
+    console.log("actionType is：",actionType);
+    // 这里可以添加处理输入内容的逻辑
+    // 后续改成actionName在ros里存在的情况才可以
+   
+  })
+
+function handleClick(){
+
+      
+     const turtleClient = new ROSLIB.Action({
+      ros : ros,
+      name : actionName,
+      actionType : actionType
+    });
+     // If there is an error on the backend, an 'error' emit will be emitted.
+    // goal1 = {theta:10};
+    // console.log("goalType is：",goal==goal1);
+    var goal_id = turtleClient.sendGoal(goal, 
+    function(result) {
+      console.log('Result for action goal on',result);
+      var resultText = ''; // 用于拼接 result 的文本
+    // console.log('Result for action goal on ' + turtleClient.name + ': ' + result.result.sequence);
+    for (const key in result) {
+    if (result.hasOwnProperty(key)) {
+     resultText += `${key}: ${result[key]}\n`; // 拼接每条数据并换行
+      }
+      document.getElementById('actionResult').innerText = resultText ;
+    }
+  },
+
+  function(feedback) {
+    var feedbackText = ''; // 用于拼接 feedback 的文本
+    for (const key in feedback) {
+    if (feedback.hasOwnProperty(key)) {
+      const line = `  ${key}: ${feedback[key]}`;
+      console.log(line);
+      feedbackText += line + '\n'; // 拼接每条数据并换行
+    }
+    document.getElementById('feedbackResult').innerText = feedbackText ;
+    }
+      // 获取当前显示内容
+    //   var currentText = document.getElementById('feedbackResult').innerText;
+    
+    // // 构建新的反馈行
+    // var newLines = '';
+    // for (const key in feedback) {
+    //     if (feedback.hasOwnProperty(key)) {
+    //         const line = `${key}: ${feedback[key]}`;
+    //         console.log(line);
+    //         newLines += line + '\n';
+    //     }
+    // }
+    
+    // // 合并新旧内容，保留历史记录
+    // document.getElementById('feedbackResult').innerText = 
+    //     (currentText ? currentText + '\n' : '') + newLines;
+    
+  },
+  
+);
+
+}
+
+function CloseClick(){
+alert("hello")
+ros.close()
+}
+</script>
+
+
+
